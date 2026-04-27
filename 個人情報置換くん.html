@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>個人情報置換くん</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+    margin: 0;
+    background: #f5f7fa;
+    color: #222;
+  }
+  header {
+    background: #2c3e50;
+    color: #fff;
+    padding: 16px 24px;
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: 0.8; }
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  .panel {
+    background: #fff;
+    border: 1px solid #e1e5ea;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    margin: 0 0 12px;
+    font-size: 15px;
+    color: #34495e;
+    border-left: 4px solid #3498db;
+    padding-left: 8px;
+  }
+  .categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px;
+  }
+  .categories label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #f8f9fb;
+    border: 1px solid #e1e5ea;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    user-select: none;
+  }
+  .categories label:hover { background: #eef3f9; }
+  .categories input[type="checkbox"] { margin: 0; }
+  .editor {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .editor-col h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: #555;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  textarea {
+    width: 100%;
+    min-height: 320px;
+    padding: 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    font-family: "Menlo", "Consolas", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: #3498db; }
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  button {
+    padding: 8px 16px;
+    border: 1px solid #ccc;
+    background: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  button:hover { background: #f0f3f7; }
+  button.primary {
+    background: #3498db;
+    color: #fff;
+    border-color: #2980b9;
+  }
+  button.primary:hover { background: #2980b9; }
+  button.danger {
+    background: #fff;
+    color: #c0392b;
+    border-color: #e0b0ab;
+  }
+  button.danger:hover { background: #fdecea; }
+  .detections {
+    max-height: 240px;
+    overflow-y: auto;
+    font-size: 13px;
+  }
+  .detections table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .detections th, .detections td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+  }
+  .detections th {
+    background: #f8f9fb;
+    font-weight: 600;
+    color: #555;
+    position: sticky;
+    top: 0;
+  }
+  .detections td.label { color: #3498db; font-weight: 600; }
+  .detections td.original {
+    font-family: "Menlo", "Consolas", monospace;
+    color: #c0392b;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: #ecf0f1;
+    color: #555;
+  }
+  .custom-dict {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .custom-dict textarea {
+    min-height: 80px;
+    flex: 1;
+    min-width: 240px;
+  }
+  .custom-dict .dict-block { flex: 1; min-width: 240px; }
+  .custom-dict .dict-block label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: #555;
+    font-weight: 600;
+  }
+  .stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .stats .stat {
+    background: #f0f7fc;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid #d0e5f5;
+  }
+  .stats .stat strong { color: #2980b9; }
+  details { margin-top: 8px; }
+  summary {
+    cursor: pointer;
+    font-size: 13px;
+    color: #3498db;
+    padding: 4px 0;
+  }
+  .hint {
+    font-size: 12px;
+    color: #777;
+    margin-top: 6px;
+  }
+  .save-status {
+    font-size: 11px;
+    color: #27ae60;
+    font-weight: normal;
+    margin-left: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .save-status.show { opacity: 1; }
+  .save-status.error { color: #c0392b; }
+  @media (max-width: 780px) {
+    .editor { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>個人情報置換くん</h1>
+  <p>テキストから個人情報・機密情報を検知して固定ラベルに置換します（すべてローカル処理／通信なし）</p>
+</header>
+<main>
+
+  <div class="panel">
+    <h2>検知するカテゴリ</h2>
+    <div class="categories" id="categories"></div>
+    <p class="hint">※ 氏名・会社名・住所は辞書＋パターンマッチで検知します。見逃しがある場合は下の「カスタム辞書」で追加してください。</p>
+  </div>
+
+  <div class="panel">
+    <h2>カスタム辞書（任意） <span id="saveStatus" class="save-status"></span></h2>
+    <div class="custom-dict">
+      <div class="dict-block">
+        <label>追加の氏名（改行区切り）</label>
+        <textarea id="customNames" placeholder="例：&#10;山田太郎&#10;佐藤花子&#10;朝青龍"></textarea>
+      </div>
+      <div class="dict-block">
+        <label>追加の会社名（改行区切り）</label>
+        <textarea id="customCompanies" placeholder="例：&#10;アンソロピック&#10;◯◯商事"></textarea>
+      </div>
+      <div class="dict-block">
+        <label>その他の置換語（語=ラベル、改行区切り）</label>
+        <textarea id="customPairs" placeholder="例：&#10;プロジェクトX=[プロジェクト名]&#10;社外秘=[機密]"></textarea>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="exportDictBtn">辞書をエクスポート（JSON）</button>
+      <button id="importDictBtn">辞書をインポート</button>
+      <input type="file" id="importDictInput" accept=".json,application/json" style="display:none">
+      <button class="danger" id="resetDictBtn">辞書をリセット</button>
+    </div>
+    <p class="hint">入力内容はブラウザに自動保存されます（localStorage）。別の端末・ブラウザに移したい場合は「エクスポート」でJSONを保存し、移行先で「インポート」してください。</p>
+  </div>
+
+  <div class="panel">
+    <h2>テキスト変換</h2>
+    <div class="editor">
+      <div class="editor-col">
+        <h3>入力 <span id="inputCount" class="badge">0 文字</span></h3>
+        <textarea id="input" placeholder="ここにテキストを貼り付けてください"></textarea>
+      </div>
+      <div class="editor-col">
+        <h3>出力 <span id="outputCount" class="badge">0 文字</span></h3>
+        <textarea id="output" readonly placeholder="「変換」を押すとここに結果が表示されます"></textarea>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="runBtn">変換を実行</button>
+      <button id="copyBtn">出力をコピー</button>
+      <button id="downloadBtn">テキストとして保存</button>
+      <button class="danger" id="clearBtn">クリア</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>検知結果</h2>
+    <div class="stats" id="stats">
+      <div class="stat">検知件数 <strong id="statTotal">0</strong></div>
+    </div>
+    <details open>
+      <summary>検知項目の一覧を表示</summary>
+      <div class="detections">
+        <table>
+          <thead>
+            <tr><th>カテゴリ</th><th>置換ラベル</th><th>元の文字列</th><th>件数</th></tr>
+          </thead>
+          <tbody id="detectionBody"></tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
+</main>
+
+<script>
+// ============================================================
+// 個人情報置換くん - 検知ロジック
+// ============================================================
+
+// よくある日本の姓（上位約250件）
+const COMMON_SURNAMES = [
+  "佐藤","鈴木","高橋","田中","伊藤","渡辺","山本","中村","小林","加藤",
+  "吉田","山田","佐々木","山口","松本","井上","木村","林","斎藤","清水",
+  "山崎","森","池田","橋本","阿部","石川","山下","中島","石井","小川",
+  "前田","岡田","長谷川","藤田","後藤","近藤","村上","遠藤","青木","坂本",
+  "斉藤","福田","太田","西村","藤井","藤原","岡本","金子","中川","中野",
+  "原田","小野","田村","竹内","金田","和田","中山","石田","上田","森田",
+  "小島","柴田","原","宮崎","酒井","工藤","横山","宮本","内田","高木",
+  "安藤","谷口","大野","丸山","今井","河野","藤本","武田","村田","上野",
+  "杉山","増田","小山","大塚","平野","菅原","久保","松田","木下","野口",
+  "松井","菊地","野村","新井","渡部","田口","岩崎","中田","小松","桜井",
+  "市川","千葉","浜田","水野","須藤","川上","久保田","吉川","岡","松尾",
+  "高田","服部","樋口","西田","関","大西","三浦","北村","安田","大久保",
+  "菊池","堀","荒木","大谷","白石","早川","星野","岩田","田島","小池",
+  "永井","松岡","今村","長田","平田","飯田","関口","川崎","岡崎","三宅",
+  "根本","荒井","長谷","吉村","南","小田","杉本","星","森本","小栗",
+  "浅野","川田","谷","竹田","土屋","黒田","山内","辻","臼井","尾崎",
+  "高山","岩本","川村","岡部","松下","片山","吉岡","馬場","関根","荒川",
+  "宮田","岡村","望月","平井","大島","野田","広瀬","内藤","若林","本田",
+  "神谷","渋谷","島田","三木","大森","深沢","成田","梶原","黒川","池上",
+  "矢野","郡","浅井","桑原","西","辻村","蛯原","福島","中谷","櫻井",
+  "山中","川口","武藤","入江","堀田","下村","畑中","持田","富永","堀内",
+  "齋藤","齊藤","海老名","奥村","植田","川島","沢田","堀江","生田","仲田",
+  "米田","古川","塩田","大山","大沢","春日","長岡","渡邊","渡邉"
+];
+
+// 47都道府県
+const PREFECTURES = [
+  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
+  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
+  "新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県",
+  "静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県",
+  "奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県",
+  "徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県",
+  "熊本県","大分県","宮崎県","鹿児島県","沖縄県"
+];
+
+// カテゴリ定義
+const CATEGORIES = [
+  { id: "email",    label: "メールアドレス",     template: "[メールアドレス{n}]",   default: true },
+  { id: "phone",    label: "電話番号",           template: "[電話番号{n}]",         default: true },
+  { id: "postal",   label: "郵便番号",           template: "[郵便番号{n}]",         default: true },
+  { id: "address",  label: "住所",               template: "[住所{n}]",             default: true },
+  { id: "mynumber", label: "マイナンバー",       template: "[マイナンバー{n}]",     default: true },
+  { id: "card",     label: "クレジットカード番号", template: "[カード番号{n}]",     default: true },
+  { id: "bank",     label: "銀行口座番号",       template: "[口座番号{n}]",         default: true },
+  { id: "empid",    label: "社員番号",           template: "[社員番号{n}]",         default: true },
+  { id: "company",  label: "会社名",             template: "[会社名{n}]",           default: true },
+  { id: "name",     label: "氏名",               template: "[氏名{n}]",             default: true },
+  { id: "url",      label: "URL",                template: "[URL{n}]",              default: true },
+  { id: "ip",       label: "IPアドレス",         template: "[IPアドレス{n}]",       default: true },
+  { id: "dob",      label: "生年月日・日付",     template: "[日付{n}]",             default: false },
+  { id: "passport", label: "パスポート番号",     template: "[パスポート番号{n}]",   default: true },
+  { id: "license",  label: "運転免許証番号",     template: "[免許証番号{n}]",       default: true }
+];
+
+// ============================================================
+// 検知関数群。返り値: [{start, end, text, category}]
+// ============================================================
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findAll(text, regex, category) {
+  const results = [];
+  let m;
+  regex.lastIndex = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m[0].length === 0) { regex.lastIndex++; continue; }
+    results.push({ start: m.index, end: m.index + m[0].length, text: m[0], category });
+  }
+  return results;
+}
+
+const DETECTORS = {
+  email: (text) => findAll(text,
+    /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, "email"),
+
+  phone: (text) => {
+    // 日本の電話番号（固定・携帯・フリーダイヤル）
+    const r = /(?:\+81[-\s]?|0)\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4}/g;
+    return findAll(text, r, "phone").filter(h => {
+      const digits = h.text.replace(/\D/g, "");
+      return digits.length >= 10 && digits.length <= 13;
+    });
+  },
+
+  postal: (text) => findAll(text,
+    /〒?\s?\d{3}-\d{4}/g, "postal"),
+
+  mynumber: (text) => {
+    // 12桁（前後に英数字が続かない）。誤検出防止のため前後4桁区切り"1234 5678 9012"等も拾う
+    const r = /(?<![\d\-])(\d{4}[\s-]?\d{4}[\s-]?\d{4})(?![\d\-])/g;
+    return findAll(text, r, "mynumber").filter(h => {
+      const d = h.text.replace(/\D/g, "");
+      return d.length === 12;
+    });
+  },
+
+  card: (text) => {
+    const r = /(?<![\d])(?:\d{4}[-\s]?){3}\d{4}(?![\d])/g;
+    return findAll(text, r, "card");
+  },
+
+  bank: (text) => {
+    // "口座番号 1234567" のようなコンテキスト付き
+    const r = /(?:口座番号|普通口座|当座口座)[:：\s]?\s*\d{6,8}/g;
+    return findAll(text, r, "bank");
+  },
+
+  empid: (text) => {
+    // "社員番号 ABC-1234" / "社員ID: 1001" など
+    const r = /(?:社員番号|社員ID|従業員番号|社員コード|職員番号)[:：\s]?\s*[A-Za-z0-9\-]{3,}/g;
+    return findAll(text, r, "empid");
+  },
+
+  url: (text) => findAll(text,
+    /https?:\/\/[^\s<>"'()、。，．]+/g, "url"),
+
+  ip: (text) => {
+    const r = /(?<!\d)(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?!\d)/g;
+    return findAll(text, r, "ip");
+  },
+
+  dob: (text) => {
+    // 西暦・和暦の日付
+    const patterns = [
+      /\d{4}\s?[年\/\-\.]\s?\d{1,2}\s?[月\/\-\.]\s?\d{1,2}\s?日?/g,
+      /(?:昭和|平成|令和|大正)\s?\d{1,2}\s?年\s?\d{1,2}\s?月\s?\d{1,2}\s?日/g
+    ];
+    let results = [];
+    patterns.forEach(r => results = results.concat(findAll(text, r, "dob")));
+    return results;
+  },
+
+  passport: (text) => {
+    const r = /(?:パスポート番号|旅券番号)[:：\s]?\s*[A-Z]{1,2}\d{7}/g;
+    return findAll(text, r, "passport");
+  },
+
+  license: (text) => {
+    const r = /(?:運転免許証?(?:番号)?|免許証番号)[:：\s]?\s*\d{12}/g;
+    return findAll(text, r, "license");
+  },
+
+  address: (text) => {
+    // 都道府県 + 後続の地名文字列
+    const prefPattern = PREFECTURES.map(escapeRegex).join("|");
+    // 都道府県+市区郡町村 + 数字含む番地まで可能な限り拾う
+    const r = new RegExp(
+      "(?:" + prefPattern + ")" +
+      "[\\u4e00-\\u9fa5ぁ-んァ-ヶー一-龠々〇\\w]*?" +
+      "(?:市|区|町|村|郡)" +
+      "[\\u4e00-\\u9fa5ぁ-んァ-ヶー一-龠々〇\\w\\-－―ー\\d０-９丁目番地号]*",
+      "g"
+    );
+    const results = findAll(text, r, "address");
+    // 都道府県名単体も拾う（残り）
+    const pref = new RegExp("(?:" + prefPattern + ")", "g");
+    const all = findAll(text, pref, "address");
+    // すでにaddressマッチに含まれるものは除外
+    const filtered = all.filter(h =>
+      !results.some(r2 => h.start >= r2.start && h.end <= r2.end));
+    return results.concat(filtered);
+  },
+
+  company: (text) => {
+    const patterns = [
+      /(?:株式会社|有限会社|合同会社|合資会社|合名会社|一般社団法人|公益社団法人|一般財団法人|公益財団法人|特定非営利活動法人|NPO法人|独立行政法人|国立大学法人)[\u4e00-\u9fa5ぁ-んァ-ヶーA-Za-z0-9・\-－\s]{1,30}?(?=[\s、。，．\n]|$)/g,
+      /[\u4e00-\u9fa5ぁ-んァ-ヶーA-Za-z0-9・\-－]{1,30}?(?:株式会社|有限会社|合同会社)/g,
+      /[\u4e00-\u9fa5ぁ-んァ-ヶーA-Za-z0-9・\-－]{1,30}?[（(]株[）)]/g,
+      /[（(]株[）)][\u4e00-\u9fa5ぁ-んァ-ヶーA-Za-z0-9・\-－]{1,30}/g
+    ];
+    let results = [];
+    patterns.forEach(r => results = results.concat(findAll(text, r, "company")));
+    return results;
+  },
+
+  name: (text) => {
+    let results = [];
+
+    // --- (1) 姓リスト + 後続1-4文字の漢字/カナ（given name候補） ---
+    const surnamePattern = COMMON_SURNAMES.map(escapeRegex).join("|");
+    const surnameRegex = new RegExp(
+      "(?:" + surnamePattern + ")[\\s　]?[\\u4e00-\\u9fa5々〇ぁ-んァ-ヶー]{1,4}",
+      "g"
+    );
+    results = results.concat(findAll(text, surnameRegex, "name"));
+
+    // --- (2) 敬称（様/さん/氏/殿/先生/くん/ちゃん）が付く2〜6文字の漢字・カナ ---
+    // 例: "朝青龍様", "田中さん", "アサショウリュウ氏"
+    const honorificRegex =
+      /([\u4e00-\u9fa5々〇ァ-ヶー]{2,6}?)(様|さん|氏|殿|先生|くん|ちゃん)(?![\u4e00-\u9fa5々〇ぁ-んァ-ヶー])/g;
+    let m;
+    while ((m = honorificRegex.exec(text)) !== null) {
+      const name = m[1];
+      // 「株式会社」「有限会社」で始まるものは法人名なので氏名として拾わない
+      if (/^(株式会社|有限会社|合同会社|お客)/.test(name)) continue;
+      results.push({
+        start: m.index,
+        end: m.index + name.length,
+        text: name,
+        category: "name"
+      });
+    }
+
+    // --- (3) ラベル付き氏名: "氏名: XXX" "担当者：XXX" 等 ---
+    const labelRegex =
+      /(氏名|お名前|名前|担当者|担当|申請者|契約者|送信者|受信者|差出人|作成者|責任者|代表者|記入者|署名|ご担当|顧客名|利用者|申込者)\s*[:：]\s*([\u4e00-\u9fa5々〇ぁ-んァ-ヶーA-Za-z・\s　]{2,20}?)(?=[\n\r、。，,\.\/（）()【】\[\]]|$)/g;
+    while ((m = labelRegex.exec(text)) !== null) {
+      const name = m[2].trim();
+      if (name.length >= 2 && name.length <= 20) {
+        const start = m.index + m[0].lastIndexOf(m[2]);
+        results.push({
+          start,
+          end: start + name.length,
+          text: name,
+          category: "name"
+        });
+      }
+    }
+
+    return results;
+  }
+};
+
+// ============================================================
+// 置換処理
+// ============================================================
+
+function detectAll(text, enabledCats, customNames, customCompanies) {
+  let hits = [];
+
+  // カスタム辞書を最優先で検知（長い文字列優先）
+  const nameList = customNames.filter(Boolean).sort((a,b)=>b.length-a.length);
+  nameList.forEach(n => {
+    const r = new RegExp(escapeRegex(n), "g");
+    hits = hits.concat(findAll(text, r, "name"));
+  });
+  const compList = customCompanies.filter(Boolean).sort((a,b)=>b.length-a.length);
+  compList.forEach(c => {
+    const r = new RegExp(escapeRegex(c), "g");
+    hits = hits.concat(findAll(text, r, "company"));
+  });
+
+  // 各カテゴリ検知
+  enabledCats.forEach(cat => {
+    if (DETECTORS[cat]) {
+      hits = hits.concat(DETECTORS[cat](text));
+    }
+  });
+
+  // 重複・包含を解決：長いマッチ優先、同範囲は最初に追加されたものを採用
+  hits.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    return (b.end - b.start) - (a.end - a.start);
+  });
+
+  const kept = [];
+  for (const h of hits) {
+    // 既存のkeptに包含されるならスキップ
+    const overlap = kept.find(k =>
+      !(h.end <= k.start || h.start >= k.end)
+    );
+    if (!overlap) {
+      kept.push(h);
+    }
+  }
+  return kept;
+}
+
+function applyReplacements(text, hits, customPairs) {
+  // カテゴリごとに一意な元文字列 -> ラベル番号 を採番
+  const catMap = {}; // category -> Map(original -> label)
+  const counters = {}; // category -> counter
+  const labelMap = {}; // original string -> label (per category)
+
+  CATEGORIES.forEach(c => { catMap[c.id] = new Map(); counters[c.id] = 0; });
+
+  // 同じ元文字列は同じラベルに統一する
+  hits.forEach(h => {
+    const cat = CATEGORIES.find(c => c.id === h.category);
+    if (!cat) return;
+    const map = catMap[h.category];
+    if (!map.has(h.text)) {
+      counters[h.category]++;
+      const label = cat.template.replace("{n}", counters[h.category]);
+      map.set(h.text, label);
+    }
+  });
+
+  // 置換（後ろから）
+  const sorted = [...hits].sort((a, b) => b.start - a.start);
+  let out = text;
+  const replaced = [];
+  sorted.forEach(h => {
+    const label = catMap[h.category].get(h.text);
+    out = out.slice(0, h.start) + label + out.slice(h.end);
+    replaced.push({ category: h.category, original: h.text, label });
+  });
+
+  // カスタムペア置換（シンプルな文字列置換）
+  customPairs.forEach(({from, to}) => {
+    if (!from) return;
+    const r = new RegExp(escapeRegex(from), "g");
+    let match;
+    while ((match = r.exec(out)) !== null) {
+      replaced.push({ category: "custom", original: from, label: to });
+      // カウント用にbreakしない
+    }
+    out = out.replace(r, to);
+  });
+
+  // 集計
+  const summary = {};
+  replaced.forEach(r => {
+    const key = r.category + "::" + r.original + "::" + r.label;
+    if (!summary[key]) {
+      summary[key] = { category: r.category, original: r.original, label: r.label, count: 0 };
+    }
+    summary[key].count++;
+  });
+
+  return { out, summary: Object.values(summary) };
+}
+
+// ============================================================
+// UI
+// ============================================================
+
+const catContainer = document.getElementById("categories");
+CATEGORIES.forEach(c => {
+  const lbl = document.createElement("label");
+  lbl.innerHTML = `<input type="checkbox" data-cat="${c.id}" ${c.default ? "checked" : ""}>${c.label}`;
+  catContainer.appendChild(lbl);
+});
+
+const inputEl = document.getElementById("input");
+const outputEl = document.getElementById("output");
+const inputCount = document.getElementById("inputCount");
+const outputCount = document.getElementById("outputCount");
+
+inputEl.addEventListener("input", () => {
+  inputCount.textContent = `${inputEl.value.length} 文字`;
+});
+
+function parsePairs(text) {
+  return text.split(/\r?\n/).map(line => {
+    const m = line.match(/^(.+?)[=＝](.+)$/);
+    if (m) return { from: m[1].trim(), to: m[2].trim() };
+    return null;
+  }).filter(Boolean);
+}
+
+function parseList(text) {
+  return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+}
+
+function categoryLabelOf(id) {
+  if (id === "custom") return "カスタム";
+  const c = CATEGORIES.find(x => x.id === id);
+  return c ? c.label : id;
+}
+
+document.getElementById("runBtn").addEventListener("click", () => {
+  const text = inputEl.value;
+  if (!text) { outputEl.value = ""; renderDetections([]); return; }
+
+  const enabledCats = Array.from(document.querySelectorAll("#categories input:checked"))
+    .map(el => el.dataset.cat);
+  const customNames = parseList(document.getElementById("customNames").value);
+  const customCompanies = parseList(document.getElementById("customCompanies").value);
+  const customPairs = parsePairs(document.getElementById("customPairs").value);
+
+  const hits = detectAll(text, enabledCats, customNames, customCompanies);
+  const { out, summary } = applyReplacements(text, hits, customPairs);
+
+  outputEl.value = out;
+  outputCount.textContent = `${out.length} 文字`;
+  renderDetections(summary);
+});
+
+function renderDetections(summary) {
+  const body = document.getElementById("detectionBody");
+  const total = summary.reduce((s, x) => s + x.count, 0);
+  document.getElementById("statTotal").textContent = total;
+  body.innerHTML = "";
+  summary.sort((a,b) => b.count - a.count || a.category.localeCompare(b.category));
+  summary.forEach(s => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${categoryLabelOf(s.category)}</td>
+      <td class="label">${escapeHtml(s.label)}</td>
+      <td class="original">${escapeHtml(s.original)}</td>
+      <td>${s.count}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  }[c]));
+}
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  if (!outputEl.value) return;
+  try {
+    await navigator.clipboard.writeText(outputEl.value);
+    flashButton("copyBtn", "コピーしました");
+  } catch {
+    outputEl.select();
+    document.execCommand("copy");
+    flashButton("copyBtn", "コピーしました");
+  }
+});
+
+function flashButton(id, msg) {
+  const btn = document.getElementById(id);
+  const orig = btn.textContent;
+  btn.textContent = msg;
+  setTimeout(() => btn.textContent = orig, 1200);
+}
+
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  if (!outputEl.value) return;
+  const blob = new Blob([outputEl.value], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "masked_" + new Date().toISOString().slice(0,19).replace(/[:T]/g,"-") + ".txt";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("clearBtn").addEventListener("click", () => {
+  inputEl.value = "";
+  outputEl.value = "";
+  inputCount.textContent = "0 文字";
+  outputCount.textContent = "0 文字";
+  renderDetections([]);
+});
+
+// ============================================================
+// localStorage への自動保存／読込
+// ============================================================
+const STORAGE_KEY = "kojinJohoChikan_v1";
+
+function loadDictionary() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (typeof data.customNames === "string")     document.getElementById("customNames").value     = data.customNames;
+    if (typeof data.customCompanies === "string") document.getElementById("customCompanies").value = data.customCompanies;
+    if (typeof data.customPairs === "string")     document.getElementById("customPairs").value     = data.customPairs;
+    if (data.categories && typeof data.categories === "object") {
+      Object.entries(data.categories).forEach(([id, checked]) => {
+        const el = document.querySelector(`#categories input[data-cat="${id}"]`);
+        if (el) el.checked = !!checked;
+      });
+    }
+  } catch (e) {
+    console.warn("辞書の読込に失敗しました", e);
+    showSaveStatus("読込に失敗しました", true);
+  }
+}
+
+function collectDictionary() {
+  const cats = {};
+  document.querySelectorAll("#categories input[type=checkbox]").forEach(el => {
+    cats[el.dataset.cat] = el.checked;
+  });
+  return {
+    customNames:     document.getElementById("customNames").value,
+    customCompanies: document.getElementById("customCompanies").value,
+    customPairs:     document.getElementById("customPairs").value,
+    categories:      cats
+  };
+}
+
+function saveDictionary() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(collectDictionary()));
+    showSaveStatus("✓ 自動保存しました");
+  } catch (e) {
+    console.warn("辞書の保存に失敗しました", e);
+    showSaveStatus("保存に失敗しました（localStorage未対応の可能性）", true);
+  }
+}
+
+let saveStatusTimer;
+function showSaveStatus(msg, isError) {
+  const el = document.getElementById("saveStatus");
+  el.textContent = msg;
+  el.classList.toggle("error", !!isError);
+  el.classList.add("show");
+  clearTimeout(saveStatusTimer);
+  saveStatusTimer = setTimeout(() => el.classList.remove("show"), 1500);
+}
+
+let saveTimer;
+function debouncedSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveDictionary, 400);
+}
+
+["customNames", "customCompanies", "customPairs"].forEach(id => {
+  document.getElementById(id).addEventListener("input", debouncedSave);
+});
+document.querySelectorAll("#categories input[type=checkbox]").forEach(el => {
+  el.addEventListener("change", debouncedSave);
+});
+
+// エクスポート
+document.getElementById("exportDictBtn").addEventListener("click", () => {
+  const data = { ...collectDictionary(), exportedAt: new Date().toISOString(), version: 1 };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "個人情報置換くん_辞書_" + new Date().toISOString().slice(0,10) + ".json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// インポート
+document.getElementById("importDictBtn").addEventListener("click", () => {
+  document.getElementById("importDictInput").click();
+});
+document.getElementById("importDictInput").addEventListener("change", (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (typeof data.customNames === "string")     document.getElementById("customNames").value     = data.customNames;
+      if (typeof data.customCompanies === "string") document.getElementById("customCompanies").value = data.customCompanies;
+      if (typeof data.customPairs === "string")     document.getElementById("customPairs").value     = data.customPairs;
+      if (data.categories && typeof data.categories === "object") {
+        Object.entries(data.categories).forEach(([id, checked]) => {
+          const el2 = document.querySelector(`#categories input[data-cat="${id}"]`);
+          if (el2) el2.checked = !!checked;
+        });
+      }
+      saveDictionary();
+      showSaveStatus("✓ インポートしました");
+    } catch (err) {
+      alert("辞書ファイルの読み込みに失敗しました：\n" + err.message);
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = "";
+});
+
+// リセット
+document.getElementById("resetDictBtn").addEventListener("click", () => {
+  if (!confirm("カスタム辞書（氏名・会社名・置換語）をすべて削除します。よろしいですか？")) return;
+  document.getElementById("customNames").value = "";
+  document.getElementById("customCompanies").value = "";
+  document.getElementById("customPairs").value = "";
+  saveDictionary();
+  showSaveStatus("✓ リセットしました");
+});
+
+// 起動時に読込
+loadDictionary();
+
+// サンプルテキスト（初回だけ）
+inputEl.value = `【お問い合わせ履歴】
+担当：田中太郎（社員番号: EMP-10234）
+所属：株式会社サンプル商事 営業部
+
+お客様情報：
+氏名：朝青龍 明徳
+住所：東京都渋谷区神宮前1-2-3
+電話：03-1234-5678 / 090-1234-5678
+メール：asashoryu@example.com
+生年月日：1985年6月15日
+マイナンバー：1234 5678 9012
+
+本日、朝青龍様よりお電話をいただきました。
+佐藤花子さんにも後ほど連絡予定です。
+
+補足：
+- Webサイト https://example.com/support
+- サーバーIP 192.168.1.100
+- カード番号 4111-1111-1111-1111
+- 口座番号 1234567`;
+inputCount.textContent = `${inputEl.value.length} 文字`;
+</script>
+</body>
+</html>
