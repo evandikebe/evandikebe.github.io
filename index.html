@@ -229,6 +229,11 @@
         <label>その他の置換語（語=ラベル、改行区切り）</label>
         <textarea id="customPairs" placeholder="例：&#10;プロジェクトX=[プロジェクト名]&#10;社外秘=[機密]"></textarea>
       </div>
+      <div class="dict-block">
+        <label>社員番号の形式（任意・改行区切り）</label>
+        <textarea id="customEmpFormats" placeholder="例：&#10;EMP-####&#10;E#####&#10;####-AA"></textarea>
+        <p class="hint" style="margin-top:4px">記号: <code>#</code>=数字 / <code>A</code>=英字 / <code>*</code>=英数字 / それ以外はそのままの文字。「社員番号:」のようなラベルがなくても検知されます。</p>
+      </div>
     </div>
     <div class="actions">
       <button id="exportDictBtn">辞書をエクスポート（JSON）</button>
@@ -347,6 +352,24 @@ const CATEGORIES = [
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// 社員番号などの「形式」文字列を正規表現に変換
+//   #  → 数字 (\d)
+//   A  → 英字 ([A-Za-z])
+//   *  → 英数字 ([A-Za-z0-9])
+//   それ以外 → そのまま（正規表現的にエスケープ）
+function buildFormatRegex(format) {
+  if (!format) return null;
+  let pattern = "";
+  for (const ch of format) {
+    if (ch === "#") pattern += "\\d";
+    else if (ch === "A") pattern += "[A-Za-z]";
+    else if (ch === "*") pattern += "[A-Za-z0-9]";
+    else pattern += escapeRegex(ch);
+  }
+  // 前後の英数字・ハイフンに食い込まないよう境界を付与
+  return new RegExp("(?<![A-Za-z0-9\\-])" + pattern + "(?![A-Za-z0-9])", "g");
 }
 
 function findAll(text, regex, category) {
@@ -516,7 +539,7 @@ const DETECTORS = {
 // 置換処理
 // ============================================================
 
-function detectAll(text, enabledCats, customNames, customCompanies) {
+function detectAll(text, enabledCats, customNames, customCompanies, customEmpFormats) {
   let hits = [];
 
   // カスタム辞書を最優先で検知（長い文字列優先）
@@ -537,6 +560,20 @@ function detectAll(text, enabledCats, customNames, customCompanies) {
       hits = hits.concat(DETECTORS[cat](text));
     }
   });
+
+  // カスタム社員番号フォーマット（empidが有効な場合のみ）
+  if (enabledCats.includes("empid") && Array.isArray(customEmpFormats)) {
+    // 長いパターン優先
+    const formats = customEmpFormats.filter(Boolean).sort((a, b) => b.length - a.length);
+    formats.forEach(fmt => {
+      try {
+        const r = buildFormatRegex(fmt);
+        if (r) hits = hits.concat(findAll(text, r, "empid"));
+      } catch (e) {
+        console.warn("社員番号フォーマットが無効です:", fmt, e);
+      }
+    });
+  }
 
   // 重複・包含を解決：長いマッチ優先、同範囲は最初に追加されたものを採用
   hits.sort((a, b) => {
@@ -659,8 +696,9 @@ document.getElementById("runBtn").addEventListener("click", () => {
   const customNames = parseList(document.getElementById("customNames").value);
   const customCompanies = parseList(document.getElementById("customCompanies").value);
   const customPairs = parsePairs(document.getElementById("customPairs").value);
+  const customEmpFormats = parseList(document.getElementById("customEmpFormats").value);
 
-  const hits = detectAll(text, enabledCats, customNames, customCompanies);
+  const hits = detectAll(text, enabledCats, customNames, customCompanies, customEmpFormats);
   const { out, summary } = applyReplacements(text, hits, customPairs);
 
   outputEl.value = out;
@@ -736,13 +774,39 @@ document.getElementById("clearBtn").addEventListener("click", () => {
 const STORAGE_KEY = "kojinJohoChikan_v1";
 
 function loadDictionary() {
+  // v2（プロファイル形式）からの自動移行：現在選択中のプロファイルを単一辞書として展開
+  try {
+    const v2raw = localStorage.getItem("kojinJohoChikan_v2");
+    if (v2raw) {
+      const v2 = JSON.parse(v2raw);
+      if (v2 && v2.profiles && typeof v2.profiles === "object") {
+        const name = (typeof v2.currentProfile === "string" && v2.profiles[v2.currentProfile])
+          ? v2.currentProfile
+          : Object.keys(v2.profiles)[0];
+        const p = v2.profiles[name] || {};
+        const migrated = {
+          customNames:      typeof p.customNames === "string" ? p.customNames : "",
+          customCompanies:  typeof p.customCompanies === "string" ? p.customCompanies : "",
+          customPairs:      typeof p.customPairs === "string" ? p.customPairs : "",
+          customEmpFormats: typeof p.customEmpFormats === "string" ? p.customEmpFormats : "",
+          categories:       p.categories && typeof p.categories === "object" ? p.categories : {}
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        localStorage.removeItem("kojinJohoChikan_v2");
+      }
+    }
+  } catch (e) {
+    console.warn("旧プロファイルデータの移行に失敗", e);
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
-    if (typeof data.customNames === "string")     document.getElementById("customNames").value     = data.customNames;
-    if (typeof data.customCompanies === "string") document.getElementById("customCompanies").value = data.customCompanies;
-    if (typeof data.customPairs === "string")     document.getElementById("customPairs").value     = data.customPairs;
+    if (typeof data.customNames === "string")      document.getElementById("customNames").value      = data.customNames;
+    if (typeof data.customCompanies === "string")  document.getElementById("customCompanies").value  = data.customCompanies;
+    if (typeof data.customPairs === "string")      document.getElementById("customPairs").value      = data.customPairs;
+    if (typeof data.customEmpFormats === "string") document.getElementById("customEmpFormats").value = data.customEmpFormats;
     if (data.categories && typeof data.categories === "object") {
       Object.entries(data.categories).forEach(([id, checked]) => {
         const el = document.querySelector(`#categories input[data-cat="${id}"]`);
@@ -761,10 +825,11 @@ function collectDictionary() {
     cats[el.dataset.cat] = el.checked;
   });
   return {
-    customNames:     document.getElementById("customNames").value,
-    customCompanies: document.getElementById("customCompanies").value,
-    customPairs:     document.getElementById("customPairs").value,
-    categories:      cats
+    customNames:      document.getElementById("customNames").value,
+    customCompanies:  document.getElementById("customCompanies").value,
+    customPairs:      document.getElementById("customPairs").value,
+    customEmpFormats: document.getElementById("customEmpFormats").value,
+    categories:       cats
   };
 }
 
@@ -794,7 +859,7 @@ function debouncedSave() {
   saveTimer = setTimeout(saveDictionary, 400);
 }
 
-["customNames", "customCompanies", "customPairs"].forEach(id => {
+["customNames", "customCompanies", "customPairs", "customEmpFormats"].forEach(id => {
   document.getElementById(id).addEventListener("input", debouncedSave);
 });
 document.querySelectorAll("#categories input[type=checkbox]").forEach(el => {
@@ -824,11 +889,24 @@ document.getElementById("importDictInput").addEventListener("change", (ev) => {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (typeof data.customNames === "string")     document.getElementById("customNames").value     = data.customNames;
-      if (typeof data.customCompanies === "string") document.getElementById("customCompanies").value = data.customCompanies;
-      if (typeof data.customPairs === "string")     document.getElementById("customPairs").value     = data.customPairs;
-      if (data.categories && typeof data.categories === "object") {
-        Object.entries(data.categories).forEach(([id, checked]) => {
+
+      // 旧プロファイル形式（v2）のJSONも、現在の選択プロファイルを単体辞書として取り込む
+      let src = data;
+      if (data && data.profiles && typeof data.profiles === "object") {
+        const name = (typeof data.currentProfile === "string" && data.profiles[data.currentProfile])
+          ? data.currentProfile
+          : Object.keys(data.profiles)[0];
+        src = data.profiles[name] || {};
+      } else if (data && data.profile && typeof data.profile === "object") {
+        src = data.profile;
+      }
+
+      if (typeof src.customNames === "string")      document.getElementById("customNames").value      = src.customNames;
+      if (typeof src.customCompanies === "string")  document.getElementById("customCompanies").value  = src.customCompanies;
+      if (typeof src.customPairs === "string")      document.getElementById("customPairs").value      = src.customPairs;
+      if (typeof src.customEmpFormats === "string") document.getElementById("customEmpFormats").value = src.customEmpFormats;
+      if (src.categories && typeof src.categories === "object") {
+        Object.entries(src.categories).forEach(([id, checked]) => {
           const el2 = document.querySelector(`#categories input[data-cat="${id}"]`);
           if (el2) el2.checked = !!checked;
         });
@@ -845,10 +923,11 @@ document.getElementById("importDictInput").addEventListener("change", (ev) => {
 
 // リセット
 document.getElementById("resetDictBtn").addEventListener("click", () => {
-  if (!confirm("カスタム辞書（氏名・会社名・置換語）をすべて削除します。よろしいですか？")) return;
+  if (!confirm("カスタム辞書（氏名・会社名・置換語・社員番号形式）をすべて削除します。よろしいですか？")) return;
   document.getElementById("customNames").value = "";
   document.getElementById("customCompanies").value = "";
   document.getElementById("customPairs").value = "";
+  document.getElementById("customEmpFormats").value = "";
   saveDictionary();
   showSaveStatus("✓ リセットしました");
 });
